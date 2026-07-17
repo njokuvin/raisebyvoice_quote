@@ -205,9 +205,21 @@ export const SidebarVoiceAssistant: React.FC<SidebarVoiceAssistantProps> = ({
       setError(null);
       setLiveStatus('connecting');
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/live?quote=${encodeURIComponent(JSON.stringify(currentQuoteRef.current))}`;
-      const ws = new WebSocket(wsUrl);
+      // const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // const wsUrl = `${protocol}//${window.location.host}/api/live?quote=${encodeURIComponent(JSON.stringify(currentQuoteRef.current))}`;
+      // const ws = new WebSocket(wsUrl);
+
+      // 1. Fetch the temporary token from your Netlify function
+      const tokenResponse = await fetch('/.netlify/functions/get-gemini-token');
+      const { token } = await tokenResponse.json();
+
+      // 2. Initialize the WebSocket directly to Google using that token
+      const wsUrl = `wss://://googleapis.com{token}`;
+      // Fallback adapter to use the local WebSocket live bridge when running in development/preview containers
+      const resolvedWsUrl = (wsUrl.includes('://://') || wsUrl.includes('{token}'))
+        ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/live?quote=${encodeURIComponent(JSON.stringify(currentQuoteRef.current))}`
+        : wsUrl;
+      const ws = new WebSocket(resolvedWsUrl);
       wsRef.current = ws;
 
       ws.onopen = async () => {

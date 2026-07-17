@@ -295,6 +295,20 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+// Emulate Netlify function locally for development and preview
+app.get("/.netlify/functions/get-gemini-token", async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(200).json({ token: "mock-temporary-token-preview-fallback" });
+    }
+    const token = Buffer.from(apiKey).toString('base64');
+    res.json({ token });
+  } catch (error: any) {
+    res.status(500).json({ error: error.toString() });
+  }
+});
+
 // Mock Email Client Sending Endpoint
 app.post("/api/send-email", async (req, res) => {
   try {
