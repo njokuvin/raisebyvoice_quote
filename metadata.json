@@ -1,0 +1,7 @@
+{
+  "name": "RaisebyVoice_Quote",
+  "description": "Natural language voice-powered quotation creation and editing tool",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
