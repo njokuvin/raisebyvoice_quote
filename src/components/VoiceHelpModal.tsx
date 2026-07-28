@@ -72,18 +72,22 @@ export const VoiceHelpModal: React.FC<VoiceHelpModalProps> = ({ isOpen, onClose 
           <div className="space-y-4">
             <h3 className="text-white font-semibold flex items-center gap-2">
               <Mic className="w-4 h-4 text-rose-500" />
-              Example Voice Commands & Clearing:
+              Example Voice Commands & Hausa Translation:
             </h3>
 
             <div className="grid gap-3">
               {[
                 {
-                  title: 'Fill Out Specific Fields',
-                  example: '"Set client name to Sarah Connor and company to Cyberdyne Systems."'
+                  title: 'Hausa Speech Auto-Translated to English',
+                  example: '"Kamfanin shine Cyberdyne Systems, sunan aboki shine Ali Bello" -> Translates & sets Client Company: Cyberdyne Systems, Client Name: Ali Bello'
                 },
                 {
-                  title: 'Clear Any Form Field',
-                  example: '"Clear client email" or "Clear notes" or "Clear discount" or "Clear tax"'
+                  title: 'Hausa Items & Discounts',
+                  example: '"Saka rangwame na kashi 10% sannan kara kaya guda 5 a kan dala 100" -> Applies 10% discount and adds 5 x $100 items.'
+                },
+                {
+                  title: 'Clear Any Form Field (English or Hausa)',
+                  example: '"Clear client email" or "Goge sunan aboki" or "Goge rangwame" or "Clear tax"'
                 },
                 {
                   title: 'Duplicate Word Prevention',

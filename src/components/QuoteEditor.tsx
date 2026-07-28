@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   Plus, Trash2, Calendar, Building, User, Mail, MapPin, FileText,
-  Upload, Image, Phone, ChevronDown, ChevronUp, Settings
+  Upload, Image, Phone, ChevronDown, ChevronUp, Settings, Send, AlertTriangle, Ruler
 } from 'lucide-react';
+import { YellowTapeIcon } from './SharedFacility';
 import { Quotation, QuoteStatus, CurrencyCode, LineItem, CompanyProfile } from '../types';
-import { calculateSubtotal, calculateDiscountAmount, calculateTaxAmount, calculateGrandTotal, formatCurrency, cleanDuplicateWords } from '../utils/quoteUtils';
+import { calculateSubtotal, calculateDiscountAmount, calculateTaxAmount, calculateGrandTotal, formatCurrency, cleanDuplicateWords, getCurrencySymbol, formatFigureOnly, calculateSetupChargeAmount, calculateServiceChargeAmount } from '../utils/quoteUtils';
 
 interface QuoteEditorProps {
   quote: Quotation;
@@ -12,6 +13,11 @@ interface QuoteEditorProps {
   companyProfile: CompanyProfile;
   onUpdateCompanyProfile: (profile: CompanyProfile) => void;
   onDeleteQuote?: (id: string) => void;
+  onSendQuote?: () => void;
+  showValidationAlert?: boolean;
+  missingRequiredFields?: string[];
+  onDismissValidationAlert?: () => void;
+  onOpenMeasurement?: () => void;
 }
 
 export const QuoteEditor: React.FC<QuoteEditorProps> = ({ 
@@ -19,10 +25,43 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
   onUpdateQuote, 
   companyProfile, 
   onUpdateCompanyProfile,
-  onDeleteQuote
+  onDeleteQuote,
+  onSendQuote,
+  showValidationAlert = false,
+  missingRequiredFields = [],
+  onDismissValidationAlert,
+  onOpenMeasurement
 }) => {
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Automatically expand Company Details settings and scroll missing required field into view
+  React.useEffect(() => {
+    if (showValidationAlert) {
+      setIsSettingsExpanded(true);
+      const timer = setTimeout(() => {
+        let targetEl: HTMLElement | null = null;
+        if (!companyProfile.phone || !companyProfile.phone.trim()) {
+          targetEl = document.getElementById('field-company-phone');
+        } else if (!companyProfile.signatoryName || !companyProfile.signatoryName.trim()) {
+          targetEl = document.getElementById('field-signatory-name');
+        } else if (!companyProfile.whatsapp || !companyProfile.whatsapp.trim()) {
+          targetEl = document.getElementById('field-company-whatsapp');
+        }
+
+        if (!targetEl) {
+          targetEl = document.getElementById('validation-alert-banner');
+        }
+
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+
+      return () => clearTimeout(timer);
+    }
+  }, [showValidationAlert]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -71,6 +110,24 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
 
   const handleFieldChange = (field: keyof Quotation, value: any) => {
     const cleanedValue = typeof value === 'string' ? cleanDuplicateWords(value) : value;
+    if (field === 'issueDate' && typeof value === 'string' && value) {
+      const issueParts = value.split('-').map(Number);
+      if (issueParts.length === 3 && !issueParts.some(isNaN)) {
+        const issueD = new Date(issueParts[0], issueParts[1] - 1, issueParts[2]);
+        const validD = new Date(issueD.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const yyyy = validD.getFullYear();
+        const mm = String(validD.getMonth() + 1).padStart(2, '0');
+        const dd = String(validD.getDate()).padStart(2, '0');
+        const validUntilStr = `${yyyy}-${mm}-${dd}`;
+        onUpdateQuote({
+          ...quote,
+          issueDate: value,
+          validUntil: validUntilStr,
+          updatedAt: new Date().toISOString(),
+        });
+        return;
+      }
+    }
     onUpdateQuote({
       ...quote,
       [field]: cleanedValue,
@@ -107,15 +164,17 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
   };
 
   const handleRemoveItem = (index: number) => {
-    const newItems = quote.items.filter((_, i) => i !== index);
+    const newItems = (quote.items || []).filter((_, i) => i !== index);
     onUpdateQuote({
       ...quote,
-      items: newItems.length > 0 ? newItems : [{ id: 'item-1', description: 'Item', quantity: 1, unitPrice: 0 }],
+      items: newItems,
       updatedAt: new Date().toISOString(),
     });
   };
 
   const subtotal = calculateSubtotal(quote);
+  const setupChargeAmount = calculateSetupChargeAmount(quote);
+  const serviceChargeAmount = calculateServiceChargeAmount(quote);
   const discountAmount = calculateDiscountAmount(quote);
   const taxAmount = calculateTaxAmount(quote);
   const grandTotal = calculateGrandTotal(quote);
@@ -123,6 +182,34 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
   return (
     <div className="max-w-5xl mx-auto w-full space-y-6 pb-12 animate-fadeIn">
       
+
+
+      {/* Validation Alert Banner */}
+      {showValidationAlert && (
+        <div id="validation-alert-banner" className="bg-rose-50 border-2 border-rose-300 rounded-xl p-4 flex items-start justify-between shadow-md animate-bounce-once">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 bg-rose-100 text-rose-600 rounded-lg shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-sm text-rose-900">Required Company Information Missing</h4>
+              <p className="text-xs font-medium text-rose-700 mt-0.5">
+                Please fill in the required field(s) before previewing or sending: <strong className="font-black text-rose-950 underline">{missingRequiredFields.join(', ')}</strong>.
+              </p>
+            </div>
+          </div>
+          {onDismissValidationAlert && (
+            <button
+              type="button"
+              onClick={onDismissValidationAlert}
+              className="text-rose-400 hover:text-rose-700 text-xs font-bold px-2 py-1 rounded hover:bg-rose-100 transition-colors"
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Company Details Configuration Panel */}
       <div className="bg-white shadow-sm border border-slate-200 rounded-lg overflow-hidden">
         <button
@@ -237,13 +324,24 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-wider text-slate-600 font-extrabold block">Company Phone</label>
+                <label className="text-[10px] uppercase tracking-wider text-slate-700 font-extrabold flex items-center justify-between">
+                  <span>Company Phone <span className="text-rose-500 font-bold">*</span></span>
+                  {(!companyProfile.phone || !companyProfile.phone.trim()) && (
+                    <span className="text-[9px] text-rose-500 font-bold uppercase tracking-wider">Required</span>
+                  )}
+                </label>
                 <input
+                  id="field-company-phone"
                   type="text"
                   value={companyProfile.phone}
                   onChange={(e) => handleProfileFieldChange('phone', e.target.value)}
-                  placeholder="e.g. +1 (555) 123-4567"
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onFocus={() => onDismissValidationAlert?.()}
+                  placeholder="your phone number"
+                  className={`w-full bg-white border rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 ${
+                    (!companyProfile.phone || !companyProfile.phone.trim()) && showValidationAlert
+                      ? 'border-rose-400 focus:ring-rose-500 ring-2 ring-rose-200'
+                      : 'border-slate-200 focus:ring-indigo-500'
+                  }`}
                 />
               </div>
 
@@ -252,6 +350,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
                 <textarea
                   value={companyProfile.address}
                   onChange={(e) => handleProfileFieldChange('address', e.target.value)}
+                  onFocus={() => onDismissValidationAlert?.()}
                   placeholder="e.g. 100 Technology Dr, Suite 500&#10;San Francisco, CA 94107"
                   rows={2}
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-sans"
@@ -260,13 +359,24 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
 
               {/* Authorized Signatory Fields */}
               <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-wider text-indigo-600 font-extrabold block">Authorized Signatory Name</label>
+                <label className="text-[10px] uppercase tracking-wider text-indigo-700 font-extrabold flex items-center justify-between">
+                  <span>Authorized Signatory Name <span className="text-rose-500 font-bold">*</span></span>
+                  {(!companyProfile.signatoryName || !companyProfile.signatoryName.trim()) && (
+                    <span className="text-[9px] text-rose-500 font-bold uppercase tracking-wider">Required</span>
+                  )}
+                </label>
                 <input
+                  id="field-signatory-name"
                   type="text"
                   value={companyProfile.signatoryName}
                   onChange={(e) => handleProfileFieldChange('signatoryName', e.target.value)}
-                  placeholder="e.g. John Doe"
-                  className="w-full bg-white border border-indigo-200 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onFocus={() => onDismissValidationAlert?.()}
+                  placeholder="your name"
+                  className={`w-full bg-white border rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 ${
+                    (!companyProfile.signatoryName || !companyProfile.signatoryName.trim()) && showValidationAlert
+                      ? 'border-rose-400 focus:ring-rose-500 ring-2 ring-rose-200'
+                      : 'border-indigo-200 focus:ring-indigo-500'
+                  }`}
                 />
               </div>
 
@@ -276,19 +386,31 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
                   type="text"
                   value={companyProfile.signatoryTitle}
                   onChange={(e) => handleProfileFieldChange('signatoryTitle', e.target.value)}
+                  onFocus={() => onDismissValidationAlert?.()}
                   placeholder="e.g. Managing Director"
                   className="w-full bg-white border border-indigo-200 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-wider text-emerald-600 font-extrabold block">Company WhatsApp Number</label>
+                <label className="text-[10px] uppercase tracking-wider text-emerald-700 font-extrabold flex items-center justify-between">
+                  <span>Company WhatsApp Number <span className="text-rose-500 font-bold">*</span></span>
+                  {(!companyProfile.whatsapp || !companyProfile.whatsapp.trim()) && (
+                    <span className="text-[9px] text-rose-500 font-bold uppercase tracking-wider">Required</span>
+                  )}
+                </label>
                 <input
+                  id="field-company-whatsapp"
                   type="text"
                   value={companyProfile.whatsapp}
                   onChange={(e) => handleProfileFieldChange('whatsapp', e.target.value)}
-                  placeholder="e.g. 555-987-6543"
-                  className="w-full bg-white border border-emerald-200 focus:border-emerald-500 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onFocus={() => onDismissValidationAlert?.()}
+                  placeholder="your WhatsApp number"
+                  className={`w-full bg-white border rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 ${
+                    (!companyProfile.whatsapp || !companyProfile.whatsapp.trim()) && showValidationAlert
+                      ? 'border-rose-400 focus:ring-rose-500 ring-2 ring-rose-200'
+                      : 'border-emerald-200 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
 
@@ -425,71 +547,94 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
         {/* Line Items Table */}
         <div className="flex-1 overflow-x-auto">
           <div className="min-w-[650px]">
-            <div className="grid grid-cols-[minmax(220px,2fr)_80px_110px_140px] gap-4 items-center bg-slate-50 border-b border-slate-200 py-3 px-4 sm:px-8 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="grid grid-cols-[minmax(220px,2fr)_80px_120px_140px] gap-4 items-center bg-slate-50 border-b border-slate-200 py-3 px-4 sm:px-8 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <div>Description</div>
               <div className="text-center">Qty</div>
-              <div className="text-right">Rate</div>
-              <div className="text-right flex items-center justify-end gap-2">
-                <span>Amount</span>
-                <button
-                  onClick={handleAddItem}
-                  className="p-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
-                  title="Add Line Item"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
+              <div className="text-right flex flex-col items-end">
+                <span>Rate</span>
+                <span className="text-[9px] text-slate-500 font-bold tracking-normal">
+                  ({getCurrencySymbol(quote.currency)})
+                </span>
+              </div>
+              <div className="text-right flex flex-col items-end">
+                <div className="flex items-center justify-end gap-2 w-full">
+                  <span>Amount</span>
+                  <button
+                    onClick={handleAddItem}
+                    className="p-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+                    title="Add Line Item"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+                <span className="text-[9px] text-slate-500 font-bold tracking-normal">
+                  ({getCurrencySymbol(quote.currency)})
+                </span>
               </div>
             </div>
 
             <div className="divide-y divide-slate-100">
-              {quote.items.map((item, index) => {
-                const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
-                return (
-                  <div key={item.id} className="grid grid-cols-[minmax(220px,2fr)_80px_110px_140px] gap-4 py-4 px-4 sm:px-8 items-center text-sm hover:bg-slate-50/80 transition-colors group">
-                    <div>
-                      <input
-                        type="text"
-                        value={item.description}
-                        onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                        placeholder="Service or product description..."
-                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
+              {(!quote.items || quote.items.length === 0) ? (
+                <div className="py-10 px-4 text-center text-slate-400 text-xs italic bg-slate-50/50 flex flex-col items-center justify-center gap-2.5">
+                  <p className="font-medium text-slate-500">No line items on this quotation.</p>
+                  <button
+                    onClick={handleAddItem}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add First Item</span>
+                  </button>
+                </div>
+              ) : (
+                quote.items.map((item, index) => {
+                  const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
+                  return (
+                    <div key={item.id} className="grid grid-cols-[minmax(220px,2fr)_80px_120px_140px] gap-4 py-4 px-4 sm:px-8 items-center text-sm hover:bg-slate-50/80 transition-colors group">
+                      <div>
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                          placeholder="Service or product description..."
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="text-center">
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="any"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.unitPrice}
+                          onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="text-right flex items-center justify-end gap-2">
+                        <span className="font-bold font-mono text-slate-800 text-xs sm:text-sm">
+                          {formatFigureOnly(itemTotal)}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveItem(index)}
+                          className="p-1 text-slate-400 hover:text-rose-600 transition-colors opacity-70 group-hover:opacity-100 cursor-pointer"
+                          title="Remove item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="any"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div className="text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.unitPrice}
-                        onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div className="text-right flex items-center justify-end gap-2">
-                      <span className="font-bold font-mono text-slate-800 text-xs sm:text-sm">
-                        {formatCurrency(itemTotal, quote.currency)}
-                      </span>
-                      <button
-                        onClick={() => handleRemoveItem(index)}
-                        className="p-1 text-slate-300 hover:text-rose-600 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Remove item"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -521,6 +666,36 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
                 className="w-20 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-right font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
+
+            {/* Setup Charge % */}
+            <div className="flex items-center space-x-2">
+              <label className="font-bold uppercase tracking-wider text-slate-400">Setup Charge %</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={quote.setupCharge || ''}
+                placeholder="0"
+                onChange={(e) => handleFieldChange('setupCharge', parseFloat(e.target.value) || 0)}
+                className="w-20 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-right font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Service Charge % */}
+            <div className="flex items-center space-x-2">
+              <label className="font-bold uppercase tracking-wider text-slate-400">Service Charge %</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={quote.serviceCharge || ''}
+                placeholder="0"
+                onChange={(e) => handleFieldChange('serviceCharge', parseFloat(e.target.value) || 0)}
+                className="w-20 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-right font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
           </div>
 
           <div className="w-full md:w-80 space-y-2">
@@ -528,6 +703,18 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
               <span className="text-slate-400 uppercase tracking-wider font-semibold">Subtotal</span>
               <span className="font-mono font-medium text-slate-800">{formatCurrency(subtotal, quote.currency)}</span>
             </div>
+            {quote.setupCharge !== undefined && quote.setupCharge > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400 uppercase tracking-wider font-semibold">Setup Charge ({quote.setupCharge}%)</span>
+                <span className="font-mono font-medium text-slate-800">+{formatCurrency(setupChargeAmount, quote.currency)}</span>
+              </div>
+            )}
+            {quote.serviceCharge !== undefined && quote.serviceCharge > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400 uppercase tracking-wider font-semibold">Service Charge ({quote.serviceCharge}%)</span>
+                <span className="font-mono font-medium text-slate-800">+{formatCurrency(serviceChargeAmount, quote.currency)}</span>
+              </div>
+            )}
             {quote.discountPercentage > 0 && (
               <div className="flex justify-between text-xs text-indigo-600">
                 <span className="uppercase tracking-wider font-semibold">Discount ({quote.discountPercentage}%)</span>
@@ -561,22 +748,57 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({
         />
       </div>
 
-      {onDeleteQuote && (
-        <div className="flex justify-end pt-2">
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-200 mt-6">
+        {onSendQuote && (
           <button
             type="button"
-            onClick={() => {
-              if (confirm(`Are you sure you want to delete this quotation (${quote.quoteNumber})?`)) {
-                onDeleteQuote(quote.id);
-              }
-            }}
-            className="flex items-center space-x-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors border border-rose-200 shadow-sm cursor-pointer"
+            onClick={onSendQuote}
+            className="flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold uppercase tracking-widest transition-all shadow-md hover:shadow-lg cursor-pointer"
           >
-            <Trash2 className="w-4 h-4" />
-            <span>Delete This Quotation</span>
+            <Send className="w-4 h-4" />
+            <span>Send / Preview Quotation</span>
           </button>
+        )}
+
+        <div>
+          {onDeleteQuote && (
+            showDeleteConfirm ? (
+              <div className="flex items-center space-x-2 bg-rose-50 border border-rose-200 p-2 rounded-lg animate-fadeIn">
+                <span className="text-xs font-bold text-rose-800 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                  Delete quotation {quote.quoteNumber}?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    onDeleteQuote(quote.id);
+                  }}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Yes, Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center space-x-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors border border-rose-200 shadow-sm cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete This Quotation</span>
+              </button>
+            )
+          )}
         </div>
-      )}
+      </div>
 
     </div>
   );

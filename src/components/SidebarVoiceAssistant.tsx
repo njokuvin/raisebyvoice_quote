@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Send, Sparkles, Loader2, HelpCircle, Volume2, Radio } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Loader2, HelpCircle, Volume2, Radio, Globe, Languages } from 'lucide-react';
 import { Quotation, VoiceLogEntry } from '../types';
 
 interface SidebarVoiceAssistantProps {
@@ -358,6 +358,16 @@ export const SidebarVoiceAssistant: React.FC<SidebarVoiceAssistantProps> = ({
         
         {/* Voice Assistant Box */}
         <div className="mb-6 shrink-0">
+          <div className="mb-2.5 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-between text-[10px] text-indigo-800 font-semibold shadow-xs">
+            <span className="flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span>Hausa & English Voice</span>
+            </span>
+            <span className="bg-indigo-600 text-white text-[9px] px-1.5 py-0.5 font-bold uppercase rounded tracking-wider">
+              Auto-Translate
+            </span>
+          </div>
+
           <h2 className="text-[11px] uppercase tracking-[0.2em] text-indigo-600 font-bold mb-3 flex items-center justify-between">
             <span>Gemini Live Voice</span>
             <span className="flex h-2 w-2 relative">
@@ -389,7 +399,7 @@ export const SidebarVoiceAssistant: React.FC<SidebarVoiceAssistantProps> = ({
                 </p>
               ) : liveStatus === 'idle' ? (
                 <p className="text-slate-400 text-xs leading-relaxed text-center italic">
-                  "Start Gemini Live to edit this quote with dynamic voice conversation..."
+                  "Speak in Hausa or English to update client details, items, or terms..."
                 </p>
               ) : liveStatus === 'connecting' ? (
                 <p className="text-indigo-200 text-xs leading-relaxed text-center animate-pulse flex items-center justify-center gap-2">
@@ -447,7 +457,7 @@ export const SidebarVoiceAssistant: React.FC<SidebarVoiceAssistantProps> = ({
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Type quote command..."
+              placeholder="Type in Hausa or English..."
               disabled={aiLoading || isListening}
               className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans disabled:opacity-55"
             />
@@ -465,16 +475,16 @@ export const SidebarVoiceAssistant: React.FC<SidebarVoiceAssistantProps> = ({
           <div className="mt-3 flex flex-wrap gap-1">
             {[
               'Add 5 hours dev @ $150',
-              'Apply 10% discount',
-              'Set Net 30 terms',
-              'Add 8.5% tax'
+              'Saka rangwame 10%',
+              'Sunan kamfani Cyberdyne',
+              'Sanya kaya guda 2 @ $50'
             ].map((p, idx) => (
               <button
                 key={idx}
                 type="button"
                 disabled={aiLoading || isListening}
                 onClick={() => handleQuickPrompt(p)}
-                className="text-[10px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 px-2 py-1 rounded border border-slate-200 transition-colors truncate max-w-[140px] disabled:opacity-50"
+                className="text-[10px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 px-2 py-1 rounded border border-slate-200 transition-colors truncate max-w-[150px] disabled:opacity-50"
               >
                 + {p}
               </button>

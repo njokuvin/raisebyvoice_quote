@@ -1,7 +1,7 @@
 import { Quotation } from '../types';
 
 export function calculateSubtotal(quote: Quotation): number {
-  return quote.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+  return (quote?.items || []).reduce((sum, item) => sum + ((item?.quantity || 0) * (item?.unitPrice || 0)), 0);
 }
 
 export function calculateDiscountAmount(quote: Quotation): number {
@@ -9,18 +9,74 @@ export function calculateDiscountAmount(quote: Quotation): number {
   return subtotal * ((quote.discountPercentage || 0) / 100);
 }
 
+export function calculateSetupAmount(quote: Quotation): number {
+  const subtotal = calculateSubtotal(quote);
+  return subtotal * ((quote.setupCharge || 0) / 100);
+}
+
+export function calculateServiceAmount(quote: Quotation): number {
+  const subtotal = calculateSubtotal(quote);
+  return subtotal * ((quote.serviceCharge || 0) / 100);
+}
+
+export const calculateSetupChargeAmount = calculateSetupAmount;
+export const calculateServiceChargeAmount = calculateServiceAmount;
+
 export function calculateTaxAmount(quote: Quotation): number {
   const subtotal = calculateSubtotal(quote);
   const discountAmount = calculateDiscountAmount(quote);
-  const taxableAmount = Math.max(0, subtotal - discountAmount);
+  const setupAmount = calculateSetupAmount(quote);
+  const serviceAmount = calculateServiceAmount(quote);
+  const taxableAmount = Math.max(0, subtotal + setupAmount + serviceAmount - discountAmount);
   return taxableAmount * ((quote.taxRate || 0) / 100);
 }
 
 export function calculateGrandTotal(quote: Quotation): number {
   const subtotal = calculateSubtotal(quote);
   const discountAmount = calculateDiscountAmount(quote);
+  const setupAmount = calculateSetupAmount(quote);
+  const serviceAmount = calculateServiceAmount(quote);
   const taxAmount = calculateTaxAmount(quote);
-  return Math.max(0, subtotal - discountAmount + taxAmount);
+  return Math.max(0, subtotal + setupAmount + serviceAmount + taxAmount - discountAmount);
+}
+
+export function getCurrencySymbol(currency: string = 'USD'): string {
+  switch (currency) {
+    case 'NGN': return '₦';
+    case 'USD': return '$';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'CAD': return '$';
+    case 'AUD': return '$';
+    case 'JPY': return '¥';
+    default: return '$';
+  }
+}
+
+export function getPdfCurrencySymbol(currency: string = 'USD'): string {
+  switch (currency?.toUpperCase()) {
+    case 'NGN': return 'NGN';
+    case 'EUR': return 'EUR';
+    case 'GBP': return 'GBP';
+    case 'JPY': return 'JPY';
+    case 'CAD': return 'CAD';
+    case 'AUD': return 'AUD';
+    case 'USD': return '$';
+    default: return currency || '$';
+  }
+}
+
+export function formatPdfCurrency(amount: number, currency: string = 'USD'): string {
+  const figure = formatFigureOnly(amount);
+  const symbol = getPdfCurrencySymbol(currency);
+  return `${symbol} ${figure}`;
+}
+
+export function formatFigureOnly(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 export function formatCurrency(amount: number, currency: string = 'USD'): string {

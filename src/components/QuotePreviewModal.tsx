@@ -7,7 +7,8 @@ import {
 import { Quotation, CompanyProfile } from '../types';
 import { 
   calculateSubtotal, calculateDiscountAmount, calculateTaxAmount, 
-  calculateGrandTotal, formatCurrency 
+  calculateGrandTotal, formatCurrency, getCurrencySymbol, formatFigureOnly,
+  calculateSetupChargeAmount, calculateServiceChargeAmount
 } from '../utils/quoteUtils';
 import { generateQuotePDF } from '../utils/pdfGenerator';
 
@@ -30,6 +31,8 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({ isOpen, on
   const [whatsAppSuccess, setWhatsAppSuccess] = useState(false);
 
   const subtotal = calculateSubtotal(quote);
+  const setupChargeAmount = calculateSetupChargeAmount(quote);
+  const serviceChargeAmount = calculateServiceChargeAmount(quote);
   const discountAmount = calculateDiscountAmount(quote);
   const taxAmount = calculateTaxAmount(quote);
   const grandTotal = calculateGrandTotal(quote);
@@ -109,7 +112,7 @@ Client: ${quote.clientCompany || quote.clientName}
 Date: ${quote.issueDate} (Valid until ${quote.validUntil})
 --------------------------------------------------
 ITEMS:
-${quote.items.map(i => `- ${i.description} (Qty: ${i.quantity}) @ ${formatCurrency(i.unitPrice, quote.currency)} = ${formatCurrency(i.quantity * i.unitPrice, quote.currency)}`).join('\n')}
+${(quote.items || []).map(i => `- ${i.description} (Qty: ${i.quantity}) @ ${formatCurrency(i.unitPrice, quote.currency)} = ${formatCurrency(i.quantity * i.unitPrice, quote.currency)}`).join('\n')}
 --------------------------------------------------
 Subtotal: ${formatCurrency(subtotal, quote.currency)}
 ${quote.discountPercentage > 0 ? `Discount (${quote.discountPercentage}%): -${formatCurrency(discountAmount, quote.currency)}\n` : ''}${quote.taxRate > 0 ? `Tax (${quote.taxRate}%): +${formatCurrency(taxAmount, quote.currency)}\n` : ''}Grand Total: ${formatCurrency(grandTotal, quote.currency)}
@@ -159,7 +162,8 @@ Notes: ${quote.notes}`;
         }
         setTimeout(() => {
           setWhatsAppSuccess(false);
-        }, 8000);
+          onClose();
+        }, 1500);
         return; // Success! Sent directly as an attachment without manual download.
       } catch (err) {
         console.warn('Native sharing failed or was cancelled, falling back to chat link:', err);
@@ -180,7 +184,8 @@ Notes: ${quote.notes}`;
     }
     setTimeout(() => {
       setWhatsAppSuccess(false);
-    }, 8000);
+      onClose();
+    }, 1500);
   };
 
   return (
@@ -228,7 +233,7 @@ Notes: ${quote.notes}`;
               id="btn-send-quote-toggle"
               type="button"
               onClick={() => setShowSendOverlay(!showSendOverlay)}
-              className={`p-2.5 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center ${
+              className={`px-3 py-2.5 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center space-x-1.5 ${
                 showSendOverlay
                   ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500'
                   : 'bg-slate-800 hover:bg-slate-750 text-slate-100 border border-slate-700'
@@ -236,6 +241,7 @@ Notes: ${quote.notes}`;
               title="Send Quote via WhatsApp"
             >
               <Send className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">Send</span>
             </button>
           </div>
 
@@ -415,7 +421,7 @@ Notes: ${quote.notes}`;
                   <img 
                     src={companyProfile.logo} 
                     alt="Watermark" 
-                    className="w-[336px] h-[336px] object-contain rotate-[-12deg]" 
+                    className="w-[504px] h-[504px] object-contain rotate-[-12deg]" 
                     referrerPolicy="no-referrer"
                   />
                 </div>
@@ -424,20 +430,20 @@ Notes: ${quote.notes}`;
               {/* Header / Brand */}
               <div className="flex justify-between items-start pb-6 border-b border-slate-300 relative z-10">
                 <div>
-                  <div className="flex items-center space-x-2 mb-1.5">
+                  <div className="flex items-center space-x-3 mb-2">
                     {companyProfile.logo ? (
                       <img 
                         src={companyProfile.logo} 
                         alt="Company Logo" 
-                        className="max-h-10 max-w-[120px] object-contain rounded"
+                        className="max-h-40 max-w-[480px] object-contain rounded"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center text-white font-bold text-sm">
+                      <div className="w-24 h-24 rounded-xl bg-black flex items-center justify-center text-white font-bold text-3xl">
                         {companyProfile.name ? companyProfile.name.charAt(0).toUpperCase() : 'C'}
                       </div>
                     )}
-                    <span className="font-extrabold text-xl tracking-tight text-black">{companyProfile.name}</span>
+                    <span className="font-extrabold text-xl sm:text-2xl tracking-tight text-black">{companyProfile.name}</span>
                   </div>
                   <p className="text-[11px] font-black text-black">{companyProfile.subtitle}</p>
                   <p className="text-[11px] font-bold text-black mt-0.5">{companyProfile.email} | {companyProfile.phone}</p>
@@ -458,10 +464,18 @@ Notes: ${quote.notes}`;
                 <div>
                   <h3 className="text-[10px] font-extrabold uppercase text-black tracking-wider mb-2">Prepared For:</h3>
                   <div className="space-y-1 text-black">
-                    <p className="font-black text-sm text-black">{quote.clientCompany || 'Client Company'}</p>
-                    <p className="font-bold text-black">{quote.clientName || 'Contact Name'}</p>
-                    <p className="text-black font-bold">{quote.clientEmail || 'client@example.com'}</p>
-                    <p className="text-black whitespace-pre-line leading-relaxed font-bold">{quote.clientAddress || 'Billing Address'}</p>
+                    {quote.clientCompany?.trim() ? (
+                      <p className="font-black text-sm text-black">{quote.clientCompany.trim()}</p>
+                    ) : null}
+                    {quote.clientName?.trim() ? (
+                      <p className="font-bold text-black">{quote.clientName.trim()}</p>
+                    ) : null}
+                    {quote.clientEmail?.trim() ? (
+                      <p className="text-black font-bold">{quote.clientEmail.trim()}</p>
+                    ) : null}
+                    {quote.clientAddress?.trim() ? (
+                      <p className="text-black whitespace-pre-line leading-relaxed font-bold">{quote.clientAddress.trim()}</p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -488,22 +502,36 @@ Notes: ${quote.notes}`;
                     <tr className="border-b-2 border-slate-900 text-black text-[10px] uppercase tracking-wider font-extrabold">
                       <th className="pb-2.5 font-black text-black">Description</th>
                       <th className="pb-2.5 font-black text-center w-12 text-black">Qty</th>
-                      <th className="pb-2.5 font-black text-right w-24 text-black">Unit Price</th>
-                      <th className="pb-2.5 font-black text-right w-24 text-black">Amount</th>
+                      <th className="pb-2.5 font-black text-right w-28 text-black">
+                        <div>Rate</div>
+                        <div className="text-[9px] font-bold text-slate-600">({getCurrencySymbol(quote.currency)})</div>
+                      </th>
+                      <th className="pb-2.5 font-black text-right w-28 text-black">
+                        <div>Amount</div>
+                        <div className="text-[9px] font-bold text-slate-600">({getCurrencySymbol(quote.currency)})</div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-300">
-                    {quote.items.map((item) => {
-                      const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
-                      return (
-                        <tr key={item.id} className="border-b border-slate-200">
-                          <td className="py-3.5 pr-3 text-black font-bold leading-relaxed">{item.description}</td>
-                          <td className="py-3.5 px-1 text-center text-black font-extrabold">{item.quantity}</td>
-                          <td className="py-3.5 px-1 text-right text-black font-mono font-extrabold">{formatCurrency(item.unitPrice, quote.currency)}</td>
-                          <td className="py-3.5 pl-1 text-right text-black font-mono font-black">{formatCurrency(itemTotal, quote.currency)}</td>
-                        </tr>
-                      );
-                    })}
+                    {(!quote.items || quote.items.length === 0) ? (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-slate-500 italic text-xs">
+                          No line items listed on this quotation.
+                        </td>
+                      </tr>
+                    ) : (
+                      quote.items.map((item) => {
+                        const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
+                        return (
+                          <tr key={item.id} className="border-b border-slate-200">
+                            <td className="py-3.5 pr-3 text-black font-bold leading-relaxed">{item.description}</td>
+                            <td className="py-3.5 px-1 text-center text-black font-extrabold">{item.quantity}</td>
+                            <td className="py-3.5 px-1 text-right text-black font-mono font-extrabold">{formatFigureOnly(item.unitPrice)}</td>
+                            <td className="py-3.5 pl-1 text-right text-black font-mono font-black">{formatFigureOnly(itemTotal)}</td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -515,6 +543,18 @@ Notes: ${quote.notes}`;
                     <span>Subtotal:</span>
                     <span className="font-mono font-black text-black">{formatCurrency(subtotal, quote.currency)}</span>
                   </div>
+                  {quote.setupCharge !== undefined && quote.setupCharge > 0 && (
+                    <div className="flex justify-between font-bold text-black">
+                      <span>Setup Charge ({quote.setupCharge}%):</span>
+                      <span className="font-mono font-black text-black">+{formatCurrency(setupChargeAmount, quote.currency)}</span>
+                    </div>
+                  )}
+                  {quote.serviceCharge !== undefined && quote.serviceCharge > 0 && (
+                    <div className="flex justify-between font-bold text-black">
+                      <span>Service Charge ({quote.serviceCharge}%):</span>
+                      <span className="font-mono font-black text-black">+{formatCurrency(serviceChargeAmount, quote.currency)}</span>
+                    </div>
+                  )}
                   {quote.discountPercentage > 0 && (
                     <div className="flex justify-between text-black font-extrabold">
                       <span>Discount ({quote.discountPercentage}%):</span>

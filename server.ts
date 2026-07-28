@@ -36,19 +36,27 @@ app.post("/api/parse-quote", async (req, res) => {
     try {
       const ai = new GoogleGenAI({ apiKey });
 
-      const systemInstruction = `You are an expert AI assistant for a Quotation Creation & Editing Tool.
+      const systemInstruction = `You are an expert AI assistant for a Quotation Creation & Editing Tool with Multilingual (Hausa & English) capabilities.
 Your job is to read natural language voice transcripts or text commands from the user and update or create a structured quotation JSON object.
 You must return ONLY a valid JSON object matching the requested schema. No markdown outside or extra chatter.
 
-CRITICAL FIELD NAME REFERENCE & BOUNDARY RULE:
-When extracting field values from the user's spoken transcript, treat form field names (e.g., "client name", "company", "client company", "email", "client email", "address", "client address", "quote number", "notes", "terms", "description", "item description") as strict reference markers. ONLY extract the exact text/words that immediately follow the field name as the intended field content. 
-- For example, if the user says "client name John Doe", the clientName should be "John Doe", NOT "client name John Doe".
-- If the user says "notes please pay within 15 days", the notes field should be "please pay within 15 days".
-- If the user says "terms net 30 days", terms should be "net 30 days".
-- Do NOT include the field name itself, filler words ("is", "to", "as"), or unrelated conversational preamble into the field value. Only perform precisely what is requested.
+LANGUAGE & FEEDBACK RULE:
+- For form field values (clientName, clientCompany, clientAddress, items.description, notes, terms, etc.), ALWAYS translate and save them in clear, professional English.
+- For the "explanation" field in the JSON response, ALWAYS respond and give feedback in the EXACT LANGUAGE the user spoke or typed. If the user input is in Hausa, write the "explanation" feedback in natural, friendly Hausa (e.g. "An yi nasarar sabunta sunan aboki da rangwame."). If the user input is in English, write the "explanation" in English.
 
-CLEARING FIELDS RULE:
-If the user's instruction or transcript contains the keyword "clear" preceding a field name (e.g., "clear client name", "clear email", "clear notes", "clear address", "clear company", "clear terms", "clear quote number", "clear discount", "clear tax"), you MUST clear that specific form field by setting string fields to "" (empty string) and numeric fields (taxRate, discountPercentage) to 0.
+HAUSA SPEECH & TRANSLATION REQUIREMENT:
+The user may speak or type instructions in Hausa (e.g. "sunan aboki Ali Bello", "kamfani Cyberdyne", "saka rangwame na kashi 10%", "aika rasiti zuwa email...", "sanya kaya guda 5 akan dala 100", "adireshin Kano Nigeria", "ka'idoji biya cikin kwanaki 30", "bayanai godiya da kasuwanci", "goge sunan aboki", etc.), in English, or in a blend of Hausa and English.
+You MUST recognize spoken/typed Hausa, accurately interpret the intent, and TRANSLATE ALL spoken Hausa content into English before placing them in the appropriate quotation JSON fields. All values saved in the output JSON fields must be in clear, professional English.
+
+CRITICAL FIELD NAME REFERENCE & BOUNDARY RULE:
+When extracting field values from the user's spoken transcript, treat form field names (e.g., "client name", "company", "client company", "email", "client email", "address", "client address", "quote number", "notes", "terms", "description", "item description", or Hausa equivalents like "sunan aboki", "kamfani", "adireshi", "ragi", "haraji") as strict reference markers. ONLY extract the exact text/words that immediately follow the field name as the intended field content. 
+- For example, if the user says "client name John Doe" or "sunan aboki John Doe", the clientName should be "John Doe".
+- If the user says "notes please pay within 15 days" or "bayanai a biya cikin kwanaki 15", the notes field should be "please pay within 15 days".
+- Do NOT include the field name itself, filler words ("is", "to", "as", "shi ne", "ne"), or unrelated conversational preamble into the field value.
+
+CLEARING FIELDS & ITEM REMOVAL RULE:
+- If the user's instruction or transcript contains the keyword "clear" or Hausa clearing words ("goge", "foge", "share") preceding a field name (e.g., "clear client name", "goge sunan aboki", "clear email", "goge email", "clear notes", "goge bayanai", "clear discount", "goge rangwame"), you MUST clear that specific form field by setting string fields to "" (empty string) and numeric fields (taxRate, discountPercentage) to 0.
+- ITEM REMOVAL RULE: If the user asks to remove, delete, or clear an item or all items (e.g., "remove item", "delete item 1", "clear items", "goge kaya", "cire kaya", "goge abin"), remove the indicated item from the items array. You MUST remove the item EVEN IF IT IS THE ONLY ITEM ON THE TABLE, resulting in an empty items array []. Do NOT keep or auto-create a placeholder item.
 
 DUPLICATE WORD PREVENTION RULE:
 Duplicate words or sequences of words (e.g. "Net 30 Net 30" or "Smith Smith") MUST NOT be inputted or kept in form fields. Clean consecutive duplicate words and duplicate word sequences.
@@ -57,11 +65,12 @@ Current Quotation State:
 ${JSON.stringify(currentQuote || {}, null, 2)}
 
 Instructions:
-1. Interpret the user's spoken input (which might be creating a new quote from scratch, or modifying/adding/deleting items, changing client info, taxes, discounts, or terms on the current quote).
-2. Follow the CRITICAL FIELD NAME REFERENCE & BOUNDARY RULE strictly when parsing any field values from the transcript.
-3. If it's a new quote request, fill out missing fields intelligently or use sensible defaults (e.g., today's date for issueDate, 7 days later for validUntil, currency USD).
-4. If it's a modification request, merge or update the current quotation accordingly while preserving unmodified fields.
-5. Provide a short "explanation" string describing what you updated or created based on their voice input.
+1. Interpret the user's spoken input (which might be in English or Hausa, creating a new quote from scratch, or modifying/adding/deleting items, changing client info, taxes, discounts, or terms on the current quote).
+2. Translate any Hausa terms/content into English before storing into the quotation state fields.
+3. Follow the CRITICAL FIELD NAME REFERENCE & BOUNDARY RULE strictly when parsing any field values from the transcript.
+4. If it's a new quote request, fill out missing fields intelligently or use sensible defaults (e.g., today's date for issueDate, 7 days later for validUntil, currency "NGN", discountPercentage 0, taxRate 0, setupCharge 10, serviceCharge 20, terms "payment within validity period before service").
+5. If it's a modification request, merge or update the current quotation accordingly while preserving unmodified fields.
+6. Provide a short "explanation" string in the EXACT LANGUAGE spoken by the user (Hausa if user spoke Hausa, English if user spoke English) describing what you updated or created based on their voice input.
 
 Return JSON Schema:
 {
@@ -72,7 +81,7 @@ Return JSON Schema:
   "clientAddress": "string",
   "issueDate": "YYYY-MM-DD",
   "validUntil": "YYYY-MM-DD",
-  "currency": "USD" | "EUR" | "GBP" | "CAD" | "AUD",
+  "currency": "NGN" | "USD" | "EUR" | "GBP" | "CAD" | "AUD" | "JPY",
   "items": [
     {
       "id": "string",
@@ -83,13 +92,15 @@ Return JSON Schema:
   ],
   "taxRate": number,
   "discountPercentage": number,
+  "setupCharge": number,
+  "serviceCharge": number,
   "notes": "string",
   "terms": "string",
-  "explanation": "string describing changes"
+  "explanation": "string describing changes in the user's spoken language"
 }`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: [
           {
             role: "user",
@@ -125,71 +136,73 @@ Return JSON Schema:
       parsedData = { ...currentQuote };
       let actionDesc = "Updated quotation via voice command.";
 
-      // Check for clear commands: e.g. "clear client name", "clear email", "clear notes", "clear address", "clear company", "clear terms", "clear quote number", "clear discount", "clear tax"
-      if (lower.includes('clear')) {
-        if (lower.includes('client name') || lower.includes('name')) {
+      // Check for clear commands in English & Hausa: e.g. "clear client name", "goge sunan aboki", "foge email", "share notes"
+      if (lower.includes('clear') || lower.includes('goge') || lower.includes('foge') || lower.includes('share')) {
+        if (lower.includes('client name') || lower.includes('name') || lower.includes('sunan') || lower.includes('suna') || lower.includes('aboki')) {
           parsedData.clientName = '';
           actionDesc = 'Cleared client name.';
         }
-        if (lower.includes('company') || lower.includes('client company')) {
+        if (lower.includes('company') || lower.includes('client company') || lower.includes('kamfani')) {
           parsedData.clientCompany = '';
           actionDesc = 'Cleared client company.';
         }
-        if (lower.includes('email') || lower.includes('client email')) {
+        if (lower.includes('email') || lower.includes('client email') || lower.includes('imanin')) {
           parsedData.clientEmail = '';
           actionDesc = 'Cleared client email.';
         }
-        if (lower.includes('address') || lower.includes('client address')) {
+        if (lower.includes('address') || lower.includes('client address') || lower.includes('adireshi')) {
           parsedData.clientAddress = '';
           actionDesc = 'Cleared client address.';
         }
-        if (lower.includes('quote number') || lower.includes('number')) {
+        if (lower.includes('quote number') || lower.includes('number') || lower.includes('lamba')) {
           parsedData.quoteNumber = '';
           actionDesc = 'Cleared quote number.';
         }
-        if (lower.includes('notes') || lower.includes('note')) {
+        if (lower.includes('notes') || lower.includes('note') || lower.includes('bayanai') || lower.includes('bayani')) {
           parsedData.notes = '';
           actionDesc = 'Cleared notes.';
         }
-        if (lower.includes('terms') || lower.includes('payment terms')) {
+        if (lower.includes('terms') || lower.includes('payment terms') || lower.includes('ka\'idoji') || lower.includes('sharudda')) {
           parsedData.terms = '';
           actionDesc = 'Cleared terms.';
         }
-        if (lower.includes('discount')) {
+        if (lower.includes('discount') || lower.includes('rangwame') || lower.includes('ragewa') || lower.includes('ragi')) {
           parsedData.discountPercentage = 0;
           actionDesc = 'Cleared discount.';
         }
-        if (lower.includes('tax') || lower.includes('vat') || lower.includes('gst')) {
+        if (lower.includes('tax') || lower.includes('vat') || lower.includes('gst') || lower.includes('haraji')) {
           parsedData.taxRate = 0;
           actionDesc = 'Cleared tax rate.';
         }
       }
 
-      // Check discount
-      const discMatch = lower.match(/(?:discount|off)\s*(?:of)?\s*(\d+(?:\.\d+)?)\s*%/);
+      // Check discount (English & Hausa e.g. "rangwame kashi 10" or "discount of 10%")
+      const discMatch = lower.match(/(?:discount|off|rangwame|ragewa|ragi)\s*(?:of|kashi|na)?\s*(\d+(?:\.\d+)?)\s*%/i) ||
+                        lower.match(/(?:rangwame|ragewa|ragi)\s*(?:kashi|na)?\s*(\d+(?:\.\d+)?)/i);
       if (discMatch) {
         const discVal = parseFloat(discMatch[1]);
         parsedData.discountPercentage = discVal;
         actionDesc = `Applied ${discVal}% discount.`;
       }
 
-      // Check tax
-      const taxMatch = lower.match(/(?:tax|vat|gst)\s*(?:rate)?\s*(?:of)?\s*(\d+(?:\.\d+)?)\s*%/);
+      // Check tax (English & Hausa e.g. "haraji kashi 5%" or "tax rate of 7.5%")
+      const taxMatch = lower.match(/(?:tax|vat|gst|haraji|harajin)\s*(?:rate|kashi|na)?\s*(?:of)?\s*(\d+(?:\.\d+)?)\s*%/i) ||
+                       lower.match(/(?:haraji|harajin)\s*(?:kashi|na)?\s*(\d+(?:\.\d+)?)/i);
       if (taxMatch) {
         const taxVal = parseFloat(taxMatch[1]);
         parsedData.taxRate = taxVal;
         actionDesc = `Set tax rate to ${taxVal}%.`;
       }
 
-      // Check client name following "client name" or "name"
-      const nameMatch = lower.match(/(?:client name|name)\s+(?:is\s+)?([a-zA-Z0-9\s]+?)(?=\s+(?:company|email|address|notes|terms|item|at|for|\$)|$)/);
+      // Check client name following "client name", "name", or Hausa "sunan aboki", "sunan mutum", "suna"
+      const nameMatch = lower.match(/(?:client name|sunan aboki|sunan mutum|sunan|suna)\s+(?:is\s+|ne\s+|shi ne\s+)?([a-zA-Z0-9\s]+?)(?=\s+(?:company|kamfani|email|address|adireshi|notes|bayanai|terms|item|at|for|\$)|$)/i);
       if (nameMatch && nameMatch[1].trim().length > 1) {
         parsedData.clientName = nameMatch[1].trim();
         actionDesc = `Updated client name to ${parsedData.clientName}.`;
       }
 
-      // Check company following "client company" or "company"
-      const companyMatch = lower.match(/(?:client company|company)\s+(?:is\s+)?([a-zA-Z0-9\s]+?)(?=\s+(?:name|email|address|notes|terms|item|at|for|\$)|$)/);
+      // Check company following "client company", "company", or Hausa "kamfani", "sunan kamfani"
+      const companyMatch = lower.match(/(?:client company|sunan kamfani|kamfani|kamfanin)\s+(?:is\s+|ne\s+|shi ne\s+)?([a-zA-Z0-9\s]+?)(?=\s+(?:name|sunan|email|address|adireshi|notes|bayanai|terms|item|at|for|\$)|$)/i);
       if (companyMatch && companyMatch[1].trim().length > 1) {
         const comp = companyMatch[1].trim();
         parsedData.clientCompany = comp.charAt(0).toUpperCase() + comp.slice(1);
@@ -203,43 +216,43 @@ Return JSON Schema:
         }
       }
 
-      // Check email following "client email" or "email"
-      const emailMatch = lower.match(/(?:client email|email)\s+(?:is\s+)?([a-zA-Z0-9@._\-\s]+?)(?=\s+(?:name|company|address|notes|terms|item|at|for|\$)|$)/);
+      // Check email following "client email", "email", or Hausa "imanin", "aika email"
+      const emailMatch = lower.match(/(?:client email|email|imanin)\s+(?:is\s+|ne\s+|shi ne\s+)?([a-zA-Z0-9@._\-\s]+?)(?=\s+(?:name|sunan|company|kamfani|address|adireshi|notes|bayanai|terms|item|at|for|\$)|$)/i);
       if (emailMatch && emailMatch[1].trim().length > 3) {
         parsedData.clientEmail = emailMatch[1].trim().replace(/\s+at\s+/g, '@').replace(/\s+dot\s+/g, '.');
         actionDesc = `Updated email to ${parsedData.clientEmail}.`;
       }
 
-      // Check address following "client address" or "address"
-      const addressMatch = lower.match(/(?:client address|address)\s+(?:is\s+)?([a-zA-Z0-9\s,.-]+?)(?=\s+(?:name|company|email|notes|terms|item)|$)/);
+      // Check address following "client address", "address", or Hausa "adireshi", "adireshin"
+      const addressMatch = lower.match(/(?:client address|address|adireshin|adireshi)\s+(?:is\s+|ne\s+|shi ne\s+)?([a-zA-Z0-9\s,.-]+?)(?=\s+(?:name|sunan|company|kamfani|email|notes|bayanai|terms|item)|$)/i);
       if (addressMatch && addressMatch[1].trim().length > 3) {
         parsedData.clientAddress = addressMatch[1].trim();
         actionDesc = `Updated address to ${parsedData.clientAddress}.`;
       }
 
-      // Check quote number following "quote number" or "number"
-      const qNumMatch = lower.match(/(?:quote number|number)\s+(?:is\s+)?([a-zA-Z0-9\-]+)/);
+      // Check quote number following "quote number", "number", or Hausa "lamban", "lamba"
+      const qNumMatch = lower.match(/(?:quote number|number|lamban rasiti|lamba)\s+(?:is\s+|ne\s+)?([a-zA-Z0-9\-]+)/i);
       if (qNumMatch && qNumMatch[1].trim().length > 0) {
         parsedData.quoteNumber = qNumMatch[1].trim().toUpperCase();
         actionDesc = `Updated quote number to ${parsedData.quoteNumber}.`;
       }
 
-      // Check notes following "notes" or "note"
-      const notesMatch = lower.match(/(?:notes|note)\s+(?:is\s+)?(.+?)(?=\s+(?:terms|client|company|email|address|quote number)|$)/);
+      // Check notes following "notes", "note", or Hausa "bayanai", "lura"
+      const notesMatch = lower.match(/(?:notes|note|bayanai|lura)\s+(?:is\s+|ne\s+)?(.+?)(?=\s+(?:terms|ka'idoji|client|company|email|address|quote number)|$)/i);
       if (notesMatch && notesMatch[1].trim().length > 0) {
         parsedData.notes = notesMatch[1].trim();
         actionDesc = `Updated notes to ${parsedData.notes}.`;
       }
 
-      // Check terms following "terms" or "payment terms"
-      const termsMatch = lower.match(/(?:terms|payment terms)\s+(?:is\s+)?(.+?)(?=\s+(?:notes|client|company|email|address|quote number)|$)/);
+      // Check terms following "terms", "payment terms", or Hausa "ka'idoji", "sharudda"
+      const termsMatch = lower.match(/(?:terms|payment terms|ka'idoji|sharudda)\s+(?:is\s+|ne\s+)?(.+?)(?=\s+(?:notes|bayanai|client|company|email|address|quote number)|$)/i);
       if (termsMatch && termsMatch[1].trim().length > 0) {
         parsedData.terms = termsMatch[1].trim();
         actionDesc = `Updated terms to ${parsedData.terms}.`;
       }
 
-      // Check adding items (e.g. "add 5 hours of design at 120 dollars" or "add 2 items for 50")
-      const addMatch = lower.match(/(?:add|include|new)\s+(?:(\d+)\s+)?(?:units?|hours?|items?|of)?\s*(.*?)\s*(?:at|for|\$)\s*(\d+(?:\.\d+)?)/i);
+      // Check adding items (English & Hausa e.g. "add 5 hours of design at 120 dollars" or "kara guda 2 a kan 50")
+      const addMatch = lower.match(/(?:add|include|new|kara|sanya|saka)\s+(?:(\d+)\s+)?(?:units?|hours?|items?|guda|na|of)?\s*(.*?)\s*(?:at|for|\$|akan|a kan)\s*(\d+(?:\.\d+)?)/i);
       if (addMatch) {
         const qty = addMatch[1] ? parseInt(addMatch[1], 10) : 1;
         const desc = addMatch[2] ? addMatch[2].trim() : 'Additional Service';
@@ -252,15 +265,36 @@ Return JSON Schema:
         };
         parsedData.items = [...(parsedData.items || []), newItem];
         actionDesc = `Added item: ${newItem.description} (${qty} x $${price}).`;
-      } else if (lower.includes('add item') || lower.includes('new item')) {
+      } else if (lower.includes('add item') || lower.includes('new item') || lower.includes('kara kaya') || lower.includes('sanya kaya')) {
         const newItem = {
           id: 'item-' + Math.random().toString(36).substring(2, 9),
-          description: transcript.replace(/add item|new item/gi, '').trim() || 'Custom Item',
+          description: transcript.replace(/add item|new item|kara kaya|sanya kaya/gi, '').trim() || 'Custom Item',
           quantity: 1,
           unitPrice: 150,
         };
         parsedData.items = [...(parsedData.items || []), newItem];
         actionDesc = `Added new item: ${newItem.description}.`;
+      }
+
+      // Check removing items (e.g. "remove item", "delete item", "goge kaya", "cire kaya", "remove item 1", "clear items")
+      if (lower.includes('remove item') || lower.includes('delete item') || lower.includes('clear items') || lower.includes('goge kaya') || lower.includes('cire kaya') || lower.includes('goge abin') || lower.includes('delete the item') || lower.includes('remove the item')) {
+        const isHausa = lower.includes('goge') || lower.includes('cire') || lower.includes('kaya');
+        if (lower.includes('all') || lower.includes('dukkan') || lower.includes('clear items')) {
+          parsedData.items = [];
+          actionDesc = isHausa ? 'An cire dukkan kaya.' : 'Removed all items.';
+        } else {
+          const numMatch = lower.match(/(?:item|kaya|lamba)\s*(\d+)/i);
+          let removeIdx = 0;
+          if (numMatch && numMatch[1]) {
+            removeIdx = Math.max(0, parseInt(numMatch[1], 10) - 1);
+          }
+          if (parsedData.items && parsedData.items.length > 0) {
+            const idxToRemove = removeIdx < parsedData.items.length ? removeIdx : 0;
+            const removedDesc = parsedData.items[idxToRemove]?.description || 'item';
+            parsedData.items = parsedData.items.filter((_, i) => i !== idxToRemove);
+            actionDesc = isHausa ? `An cire ${removedDesc}.` : `Removed ${removedDesc}.`;
+          }
+        }
       }
 
       parsedData.explanation = `${actionDesc} (Processed via smart fallback)`;
@@ -399,12 +433,19 @@ async function startServer() {
         }
       });
 
-      const systemInstruction = `You are a real-time, low-latency voice assistant for a Quotation Creation & Editing Tool.
+      const systemInstruction = `You are a real-time, low-latency multilingual (Hausa & English) voice assistant for a Quotation Creation & Editing Tool.
 Your job is to talk to the user and help them create or edit their quotation in real-time.
 
-When the user asks you to perform an action (like adding an item, editing client info, applying discount, setting tax, etc.), you MUST call the "update_quotation" tool with the updated or new values.
+MULTILINGUAL RESPONSE & TRANSLATION REQUIREMENT:
+1. The user may speak to you in Hausa (e.g., "Ina so in sa sunan kamfani Cyberdyne", "sanya mini discount din kashi 10", "kara kaya guda 5 akan dala 100", "sunan aboki Ali Bello", etc.), in English, or in a blend of both.
+2. You MUST understand spoken Hausa, translate all form field contents (names, addresses, item descriptions, payment terms, notes) into clear English, and call the "update_quotation" tool with the translated English field values.
+3. CRITICAL RESPONSE RULE: ALWAYS respond verbally and give feedback in the SAME LANGUAGE the user speaks to you!
+   - If the user speaks Hausa, reply verbally and give confirmation feedback in clear, friendly Hausa (for example: "Na sabunta sunan kamfani zuwa Cyberdyne Systems sannan na saka rangwamen kashi 10").
+   - If the user speaks English, reply verbally and give confirmation feedback in English (for example: "I've updated the client name to Ali Bello and applied a 10% discount").
+
+When the user asks you to perform an action (like adding an item, editing client info, applying discount, setting tax, clearing fields, etc.), you MUST call the "update_quotation" tool with the updated or new values in English.
 - You can change specific fields or rewrite/append the items list.
-- If you call "update_quotation", ALWAYS verbally explain to the user what you have done in a brief, friendly manner (e.g. "I've added the acoustic treatment item and set the client's company to Acme Corp").
+- If you call "update_quotation", ALWAYS verbally explain to the user what you have done in the language they spoke, in a brief, friendly manner.
 - Keep your verbal responses concise and suitable for spoken conversation. Do not read out long lists of items or long explanations unless requested.
 
 Here is the current quotation state:
