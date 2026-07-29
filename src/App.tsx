@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { ActiveService, Quotation, VoiceLogEntry, CompanyProfile } from './types';
 import { sampleQuotes } from './data/sampleQuotes';
 import { generateNewQuoteId, generateQuoteNumber, updateLastQuoteNumberCache } from './utils/quoteUtils';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { 
+  auth, 
+  saveQuotationToFirestore, 
+  fetchQuotationsFromFirestore, 
+  deleteQuotationFromFirestore 
+} from './lib/firebase';
+import { AuthModal } from './components/Auth/AuthModal';
 
 // Shared Facility Components
 import { SharedHeader, SharingFacility, MeasurementModal, SidebarVoiceAssistant, VoiceHelpModal } from './components/SharedFacility';
@@ -17,6 +25,10 @@ import { InvoiceService } from './components/Services/InvoiceService';
 import { ReportService } from './components/Services/ReportService';
 
 export default function App() {
+  // Firebase Auth & Optional Cloud Sync State
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
   // Navigation State: Startup Page ('hub') or one of 5 Services ('quotation', 'boq', 'inventory', 'invoice', 'report')
   const [activeService, setActiveService] = useState<ActiveService>('hub');
 
@@ -64,6 +76,27 @@ export default function App() {
     }
     return defaultProfile;
   });
+
+  // Firebase Auth listener and Firestore sync
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        try {
+          const remoteQuotes = await fetchQuotationsFromFirestore(currentUser.uid);
+          if (remoteQuotes && remoteQuotes.length > 0) {
+            setQuotes(remoteQuotes);
+            if (remoteQuotes[0]?.id) {
+              setCurrentQuoteId(remoteQuotes[0].id);
+            }
+          }
+        } catch (e) {
+          console.error('Error fetching remote quotes on auth state change:', e);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Save company profile on change
   useEffect(() => {
@@ -211,6 +244,11 @@ export default function App() {
     setCurrentQuoteId(newQuote.id);
     setActiveService('quotation');
     setLastExplanation(customExplanation || `Created new quotation ${newQuote.quoteNumber}.`);
+
+    if (user?.uid) {
+      saveQuotationToFirestore(user.uid, newQuote);
+    }
+
     return newQuote;
   };
 
@@ -223,6 +261,10 @@ export default function App() {
     const updatedQuotesList = quotes.map((q) => (q.id === updated.id ? updated : q));
     setQuotes(updatedQuotesList);
 
+    if (user?.uid) {
+      saveQuotationToFirestore(user.uid, updated);
+    }
+
     if (isSentTransition) {
       updateLastQuoteNumberCache(updatedQuotesList);
       createNewQuoteInternal(
@@ -233,6 +275,9 @@ export default function App() {
 
   const handleDeleteQuote = (id: string) => {
     const remaining = quotes.filter((q) => q.id !== id);
+    if (user?.uid) {
+      deleteQuotationFromFirestore(user.uid, id);
+    }
     if (remaining.length === 0) {
       handleNewQuote();
       return;
@@ -256,6 +301,10 @@ export default function App() {
     setCurrentQuoteId(duplicated.id);
     setActiveService('quotation');
     setLastExplanation(`Duplicated quote ${quote.quoteNumber} as ${duplicated.quoteNumber}.`);
+
+    if (user?.uid) {
+      saveQuotationToFirestore(user.uid, duplicated);
+    }
   };
 
   const mergeQuoteData = (data: any, current: Quotation): Quotation => {
@@ -380,7 +429,7 @@ export default function App() {
         },
         ...prev.slice(0, 19),
       ]);
-    } flex: {
+    } finally {
       setAiLoading(false);
     }
   };
@@ -405,6 +454,8 @@ export default function App() {
         onToggleListening={() => setIsListening(!isListening)}
         aiLoading={aiLoading}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        user={user}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
       {/* Main Body: Shared Gemini Voice Assistant Sidebar + Active Service Workspace */}
@@ -483,6 +534,7 @@ export default function App() {
               companyProfile={companyProfile}
               onOpenShareModal={(title, refNum, summary) => handleOpenShareModal(title, refNum, summary)}
               onOpenMeasurement={() => setIsMeasurementOpen(true)}
+              user={user}
             />
           )}
 
@@ -490,6 +542,7 @@ export default function App() {
             <InventoryService
               companyProfile={companyProfile}
               onOpenShareModal={(title, refNum, summary) => handleOpenShareModal(title, refNum, summary)}
+              user={user}
             />
           )}
 
@@ -497,6 +550,7 @@ export default function App() {
             <InvoiceService
               companyProfile={companyProfile}
               onOpenShareModal={(title, refNum, summary) => handleOpenShareModal(title, refNum, summary)}
+              user={user}
             />
           )}
 
@@ -505,6 +559,7 @@ export default function App() {
               companyProfile={companyProfile}
               onOpenShareModal={(title, refNum, summary) => handleOpenShareModal(title, refNum, summary)}
               onOpenMeasurement={() => setIsMeasurementOpen(true)}
+              user={user}
             />
           )}
         </main>
@@ -534,6 +589,11 @@ export default function App() {
       <VoiceHelpModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
 
     </div>

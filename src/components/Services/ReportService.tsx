@@ -1,15 +1,18 @@
-import React from 'react';
-import { BarChart3, TrendingUp, PieChart as PieIcon, DollarSign, FileCheck, Share2, ArrowUpRight, Award, Ruler } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { BarChart3, TrendingUp, PieChart as PieIcon, DollarSign, FileCheck, Share2, ArrowUpRight, Award, Ruler, Cloud } from 'lucide-react';
+import { User as FirebaseUser } from 'firebase/auth';
 import { YellowTapeIcon } from '../SharedFacility';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell 
 } from 'recharts';
 import { CompanyProfile } from '../../types';
+import { saveReportToFirestore, fetchReportsFromFirestore, ReportRecord } from '../../lib/firebase';
 
 interface ReportServiceProps {
   companyProfile: CompanyProfile;
   onOpenShareModal: (title: string, refNum: string, summaryText: string) => void;
   onOpenMeasurement?: () => void;
+  user?: FirebaseUser | null;
 }
 
 const revenueData = [
@@ -29,10 +32,25 @@ const categoryData = [
   { name: 'Inventory Assets', value: 5, color: '#9333ea' },
 ];
 
-export const ReportService: React.FC<ReportServiceProps> = ({ companyProfile, onOpenShareModal, onOpenMeasurement }) => {
+export const ReportService: React.FC<ReportServiceProps> = ({ companyProfile, onOpenShareModal, onOpenMeasurement, user }) => {
   const totalRevenue = revenueData.reduce((sum, d) => sum + d.invoices, 0);
   const totalQuotesVal = revenueData.reduce((sum, d) => sum + d.quotes, 0);
   const conversionRate = Math.round((totalRevenue / totalQuotesVal) * 100);
+
+  // Auto-sync executive report record to Firestore if logged in
+  useEffect(() => {
+    if (user?.uid) {
+      const reportRec: ReportRecord = {
+        id: 'rep-2026-q3',
+        title: 'Executive Financial Performance Report',
+        period: 'Q1 - Q3 2026',
+        summary: `Total Quote Volume: NGN ${totalQuotesVal.toLocaleString()} | Total Invoiced Revenue: NGN ${totalRevenue.toLocaleString()} | Conversion Rate: ${conversionRate}%`,
+        status: 'Generated',
+        updatedAt: new Date().toISOString()
+      };
+      saveReportToFirestore(user.uid, reportRec);
+    }
+  }, [user, totalRevenue, totalQuotesVal, conversionRate]);
 
   const handleShareClick = () => {
     const summary = `Executive Financial Performance Report (${companyProfile.name || 'RaisebyVoice'})\nTotal Quote Volume: NGN ${totalQuotesVal.toLocaleString()}\nTotal Invoiced Revenue: NGN ${totalRevenue.toLocaleString()}\nQuote-to-Invoice Conversion Rate: ${conversionRate}%\nReport Period: Q1 - Q3 2026`;
@@ -55,6 +73,12 @@ export const ReportService: React.FC<ReportServiceProps> = ({ companyProfile, on
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-800">
                   Business Intelligence
                 </span>
+                {user && (
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 flex items-center gap-1">
+                    <Cloud className="w-3 h-3 text-indigo-600" />
+                    Firestore Synced
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 font-mono mt-0.5">YTD Invoiced Volume: NGN {totalRevenue.toLocaleString()}</p>
             </div>

@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import { Layers, Plus, Trash2, Download, Share2, Calculator, Building2, Check, FileSpreadsheet, Ruler } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Layers, Plus, Trash2, Download, Share2, Calculator, Building2, Check, FileSpreadsheet, Ruler, Cloud } from 'lucide-react';
+import { User as FirebaseUser } from 'firebase/auth';
 import { YellowTapeIcon } from '../SharedFacility';
 import { BoqDocument, BoqItem, CompanyProfile, CurrencyCode } from '../../types';
+import { saveBoqToFirestore, fetchBoqsFromFirestore } from '../../lib/firebase';
 
 interface BoqServiceProps {
   companyProfile: CompanyProfile;
   onOpenShareModal: (title: string, refNum: string, summaryText: string) => void;
   onOpenMeasurement?: () => void;
+  user?: FirebaseUser | null;
 }
 
 const sampleBoqItems: BoqItem[] = [
@@ -17,7 +20,7 @@ const sampleBoqItems: BoqItem[] = [
   { id: 'b5', itemNo: '3.1', section: 'Finishes', description: '15mm cement-sand screed flooring ready for porcelain tile installation', unit: 'm²', quantity: 280, rate: 6500 },
 ];
 
-export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenShareModal, onOpenMeasurement }) => {
+export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenShareModal, onOpenMeasurement, user }) => {
   const [boq, setBoq] = useState<BoqDocument>({
     id: 'boq-001',
     boqNumber: 'BOQ-2026-001',
@@ -31,6 +34,27 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
     notes: 'All materials must comply with standard civil engineering building codes.',
   });
 
+  // Load BOQ from Firestore if user is logged in
+  useEffect(() => {
+    if (user?.uid) {
+      fetchBoqsFromFirestore(user.uid).then((remoteBoqs) => {
+        if (remoteBoqs && remoteBoqs.length > 0) {
+          setBoq(remoteBoqs[0]);
+        } else {
+          saveBoqToFirestore(user.uid, boq);
+        }
+      }).catch(err => console.error('Error fetching BOQ from Firestore:', err));
+    }
+  }, [user]);
+
+  // Sync BOQ to Firestore on updates if signed in
+  const updateBoqAndSync = (updated: BoqDocument) => {
+    setBoq(updated);
+    if (user?.uid) {
+      saveBoqToFirestore(user.uid, updated);
+    }
+  };
+
   const handleAddItem = () => {
     const newIdx = boq.items.length + 1;
     const newItem: BoqItem = {
@@ -42,17 +66,17 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
       quantity: 1,
       rate: 1000,
     };
-    setBoq({ ...boq, items: [...boq.items, newItem] });
+    updateBoqAndSync({ ...boq, items: [...boq.items, newItem] });
   };
 
   const handleItemChange = (index: number, field: keyof BoqItem, value: any) => {
     const newItems = [...boq.items];
     newItems[index] = { ...newItems[index], [field]: value };
-    setBoq({ ...boq, items: newItems });
+    updateBoqAndSync({ ...boq, items: newItems });
   };
 
   const handleRemoveItem = (index: number) => {
-    setBoq({ ...boq, items: boq.items.filter((_, i) => i !== index) });
+    updateBoqAndSync({ ...boq, items: boq.items.filter((_, i) => i !== index) });
   };
 
   // Calculations
@@ -81,6 +105,12 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-800">
                   Bill of Quantities
                 </span>
+                {user && (
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 flex items-center gap-1">
+                    <Cloud className="w-3 h-3 text-indigo-600" />
+                    Firestore Synced
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 font-mono mt-0.5">Reference: {boq.boqNumber}</p>
             </div>
@@ -127,7 +157,7 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
             <input
               type="text"
               value={boq.projectName}
-              onChange={(e) => setBoq({ ...boq, projectName: e.target.value })}
+              onChange={(e) => updateBoqAndSync({ ...boq, projectName: e.target.value })}
               className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -136,7 +166,7 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
             <input
               type="text"
               value={boq.clientName}
-              onChange={(e) => setBoq({ ...boq, clientName: e.target.value })}
+              onChange={(e) => updateBoqAndSync({ ...boq, clientName: e.target.value })}
               className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -145,7 +175,7 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
             <input
               type="text"
               value={boq.location}
-              onChange={(e) => setBoq({ ...boq, location: e.target.value })}
+              onChange={(e) => updateBoqAndSync({ ...boq, location: e.target.value })}
               className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -249,7 +279,7 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
               <label className="text-[10px] font-extrabold uppercase text-slate-400">BOQ Notes & Conditions</label>
               <textarea
                 value={boq.notes}
-                onChange={(e) => setBoq({ ...boq, notes: e.target.value })}
+                onChange={(e) => updateBoqAndSync({ ...boq, notes: e.target.value })}
                 rows={3}
                 className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-700 focus:outline-none"
               />
@@ -265,7 +295,7 @@ export const BoqService: React.FC<BoqServiceProps> = ({ companyProfile, onOpenSh
                 <input
                   type="number"
                   value={boq.contingencyRate}
-                  onChange={(e) => setBoq({ ...boq, contingencyRate: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => updateBoqAndSync({ ...boq, contingencyRate: parseFloat(e.target.value) || 0 })}
                   className="w-16 text-right border border-slate-200 rounded px-1 py-0.5 bg-slate-50 text-xs"
                 />
               </div>

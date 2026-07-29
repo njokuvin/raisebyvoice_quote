@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
-import { Boxes, Plus, Search, AlertTriangle, CheckCircle2, XCircle, Share2, Edit3, Trash2, Tag } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Boxes, Plus, Search, AlertTriangle, CheckCircle2, XCircle, Share2, Edit3, Trash2, Tag, Cloud, CloudCheck } from 'lucide-react';
+import { User as FirebaseUser } from 'firebase/auth';
 import { InventoryItem, CompanyProfile } from '../../types';
+import { 
+  saveInventoryToFirestore, 
+  fetchInventoryFromFirestore, 
+  deleteInventoryFromFirestore 
+} from '../../lib/firebase';
 
 interface InventoryServiceProps {
   companyProfile: CompanyProfile;
   onOpenShareModal: (title: string, refNum: string, summaryText: string) => void;
+  user?: FirebaseUser | null;
 }
 
 const initialInventory: InventoryItem[] = [
@@ -15,11 +22,27 @@ const initialInventory: InventoryItem[] = [
   { id: 'inv-5', sku: 'SKU-PLUM-022', name: '4-inch PVC Soil Pipe (3m)', category: 'Plumbing', quantity: 60, unitCost: 6200, sellingPrice: 7500, reorderLevel: 25, supplier: 'Tower Plastics', status: 'In Stock' },
 ];
 
-export const InventoryService: React.FC<InventoryServiceProps> = ({ companyProfile, onOpenShareModal }) => {
+export const InventoryService: React.FC<InventoryServiceProps> = ({ companyProfile, onOpenShareModal, user }) => {
   const [items, setItems] = useState<InventoryItem[]>(initialInventory);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isAddingItem, setIsAddingItem] = useState(false);
+
+  // Load Inventory from Firestore if user is authenticated
+  useEffect(() => {
+    if (user?.uid) {
+      fetchInventoryFromFirestore(user.uid).then((remoteItems) => {
+        if (remoteItems && remoteItems.length > 0) {
+          setItems(remoteItems);
+        } else {
+          // Initialize Firestore with default items if user has none yet
+          initialInventory.forEach((item) => {
+            saveInventoryToFirestore(user.uid, item);
+          });
+        }
+      }).catch(err => console.error('Error fetching inventory from Firestore:', err));
+    }
+  }, [user]);
 
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     sku: `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -63,6 +86,10 @@ export const InventoryService: React.FC<InventoryServiceProps> = ({ companyProfi
     };
 
     setItems([created, ...items]);
+    if (user?.uid) {
+      saveInventoryToFirestore(user.uid, created);
+    }
+
     setIsAddingItem(false);
     setNewItem({
       sku: `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -78,6 +105,9 @@ export const InventoryService: React.FC<InventoryServiceProps> = ({ companyProfi
 
   const handleRemoveItem = (id: string) => {
     setItems(items.filter((i) => i.id !== id));
+    if (user?.uid) {
+      deleteInventoryFromFirestore(user.uid, id);
+    }
   };
 
   const totalValuation = items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
@@ -105,6 +135,12 @@ export const InventoryService: React.FC<InventoryServiceProps> = ({ companyProfi
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
                   Stock Control
                 </span>
+                {user && (
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 flex items-center gap-1">
+                    <Cloud className="w-3 h-3 text-indigo-600" />
+                    Firestore Synced
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 font-mono mt-0.5">Valuation: NGN {totalValuation.toLocaleString()}</p>
             </div>

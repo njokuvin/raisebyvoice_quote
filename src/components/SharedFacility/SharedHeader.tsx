@@ -4,6 +4,8 @@ import {
   MoreVertical, Home, Layers, Boxes, Receipt, BarChart3, ChevronDown, Share2
 } from 'lucide-react';
 import { ActiveService, Quotation } from '../../types';
+import { User as FirebaseUser } from 'firebase/auth';
+import { UserAvatarMenu } from '../Auth/UserAvatarMenu';
 
 interface SharedHeaderProps {
   activeService: ActiveService;
@@ -18,6 +20,8 @@ interface SharedHeaderProps {
   onToggleListening: () => void;
   aiLoading: boolean;
   onToggleMobileSidebar: () => void;
+  user: FirebaseUser | null;
+  onOpenAuthModal: () => void;
 }
 
 export const SERVICES_LIST = [
@@ -41,6 +45,8 @@ export const SharedHeader: React.FC<SharedHeaderProps> = ({
   onToggleListening,
   aiLoading,
   onToggleMobileSidebar,
+  user,
+  onOpenAuthModal,
 }) => {
   const [isServiceDropdownOpen, setIsServiceDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -195,6 +201,8 @@ export const SharedHeader: React.FC<SharedHeaderProps> = ({
           <HelpCircle className="w-4 h-4" />
         </button>
 
+        {/* Firebase Optional User Auth Avatar Menu */}
+        <UserAvatarMenu user={user} onOpenAuthModal={onOpenAuthModal} />
       </div>
     </header>
   );

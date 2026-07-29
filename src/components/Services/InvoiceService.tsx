@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { Receipt, Plus, Share2, CheckCircle2, Clock, AlertCircle, Trash2, Printer, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Receipt, Plus, Share2, CheckCircle2, Clock, AlertCircle, Trash2, Printer, FileText, Cloud } from 'lucide-react';
+import { User as FirebaseUser } from 'firebase/auth';
 import { InvoiceRecord, LineItem, CompanyProfile, CurrencyCode } from '../../types';
+import { saveInvoiceToFirestore, fetchInvoicesFromFirestore } from '../../lib/firebase';
 
 interface InvoiceServiceProps {
   companyProfile: CompanyProfile;
   onOpenShareModal: (title: string, refNum: string, summaryText: string) => void;
+  user?: FirebaseUser | null;
 }
 
 const sampleInvoices: InvoiceRecord[] = [
@@ -45,14 +48,35 @@ const sampleInvoices: InvoiceRecord[] = [
   },
 ];
 
-export const InvoiceService: React.FC<InvoiceServiceProps> = ({ companyProfile, onOpenShareModal }) => {
+export const InvoiceService: React.FC<InvoiceServiceProps> = ({ companyProfile, onOpenShareModal, user }) => {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(sampleInvoices);
   const [activeInvoiceId, setActiveInvoiceId] = useState<string>(sampleInvoices[0].id);
+
+  // Load invoices from Firestore if signed in
+  useEffect(() => {
+    if (user?.uid) {
+      fetchInvoicesFromFirestore(user.uid).then((remoteInvoices) => {
+        if (remoteInvoices && remoteInvoices.length > 0) {
+          setInvoices(remoteInvoices);
+          if (remoteInvoices[0]?.id) {
+            setActiveInvoiceId(remoteInvoices[0].id);
+          }
+        } else {
+          sampleInvoices.forEach(inv => {
+            saveInvoiceToFirestore(user.uid, inv);
+          });
+        }
+      }).catch(err => console.error('Error fetching invoices from Firestore:', err));
+    }
+  }, [user]);
 
   const activeInvoice = invoices.find((i) => i.id === activeInvoiceId) || invoices[0];
 
   const handleUpdateInvoice = (updated: InvoiceRecord) => {
     setInvoices(invoices.map((i) => (i.id === updated.id ? updated : i)));
+    if (user?.uid) {
+      saveInvoiceToFirestore(user.uid, updated);
+    }
   };
 
   const handleCreateNewInvoice = () => {
@@ -75,6 +99,10 @@ export const InvoiceService: React.FC<InvoiceServiceProps> = ({ companyProfile, 
     };
     setInvoices([newInv, ...invoices]);
     setActiveInvoiceId(newInv.id);
+
+    if (user?.uid) {
+      saveInvoiceToFirestore(user.uid, newInv);
+    }
   };
 
   const handleAddItem = () => {
@@ -131,6 +159,12 @@ export const InvoiceService: React.FC<InvoiceServiceProps> = ({ companyProfile, 
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-800">
                   Tax Invoices & Billing
                 </span>
+                {user && (
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 flex items-center gap-1">
+                    <Cloud className="w-3 h-3 text-indigo-600" />
+                    Firestore Synced
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 font-mono mt-0.5">Active Invoice: {activeInvoice.invoiceNumber}</p>
             </div>

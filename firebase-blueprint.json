@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "path": "users/{userId}",
+      "fields": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "Quotation": {
+      "path": "users/{userId}/quotations/{quoteId}",
+      "fields": {
+        "quoteNumber": { "type": "string" },
+        "status": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "BOQ": {
+      "path": "users/{userId}/boqs/{boqId}",
+      "fields": {
+        "status": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "Report": {
+      "path": "users/{userId}/reports/{reportId}",
+      "fields": {
+        "status": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "Invoice": {
+      "path": "users/{userId}/invoices/{invoiceId}",
+      "fields": {
+        "status": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "Inventory": {
+      "path": "users/{userId}/inventory/{itemId}",
+      "fields": {
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    }
+  }
+}

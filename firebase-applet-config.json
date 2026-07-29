@@ -1,0 +1,12 @@
+{
+  "projectId": "raisebyvoice",
+  "appId": "1:499770591286:web:6d4a1799a438deb5697097",
+  "apiKey": "AIzaSyD-ibnTTZObIwMFqVizMxUQ-1dr1nCtkeE",
+  "authDomain": "raisebyvoice.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-raisebyvoice-fb0e418d-51e3-41cc-83ac-0310d899ce46",
+  "storageBucket": "raisebyvoice.firebasestorage.app",
+  "messagingSenderId": "499770591286",
+  "measurementId": "",
+  "oAuthClientId": "499770591286-ukhv0larh13k338mgbimpikil6etvdsl.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+}
